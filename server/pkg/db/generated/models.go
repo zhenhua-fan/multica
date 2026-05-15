@@ -185,6 +185,29 @@ type ChatSession struct {
 	RuntimeID   pgtype.UUID        `json:"runtime_id"`
 }
 
+type Channel struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	Description string             `json:"description"`
+	AvatarUrl   string             `json:"avatar_url"`
+	OwnerID     pgtype.UUID        `json:"owner_id"`
+	Settings    []byte             `json:"settings"`
+	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ChannelMember struct {
+	ID        pgtype.UUID        `json:"id"`
+	ChannelID pgtype.UUID        `json:"channel_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Role      string             `json:"role"`
+	AddedBy   pgtype.UUID        `json:"added_by"`
+	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
+}
+
 type Comment struct {
 	ID             pgtype.UUID        `json:"id"`
 	IssueID        pgtype.UUID        `json:"issue_id"`

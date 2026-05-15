@@ -40,6 +40,7 @@ import {
   chatMessagesOptions,
   pendingChatTaskOptions,
   pendingChatTasksOptions,
+  taskMessagesOptions,
   chatKeys,
 } from "@multica/core/chat/queries";
 import {
@@ -101,6 +102,55 @@ export function ChatWindow() {
     pendingChatTaskOptions(activeSessionId ?? ""),
   );
   const pendingTaskId = pendingTask?.task_id ?? null;
+
+  // ── Awaiting-Input Detection ──────────────────────────────────────────
+  // When the agent task is still running but has finished streaming its
+  // text output (latest task message is `text` type and no new messages
+  // have arrived), the agent is likely waiting for user input (e.g. after
+  // calling `ask` / `clarify`). We detect this and unlock the chat input
+  // so the user can respond — without this, the input stays permanently
+  // locked because the task never completes while waiting on the tool.
+  const [isAwaitingInput, setIsAwaitingInput] = useState(false);
+  const awaitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAwaitingPendingIdRef = useRef<string | null>(null);
+
+  // Fetch live task messages so we can detect when streaming has stopped.
+  const { data: liveTaskMessages } = useQuery({
+    ...taskMessagesOptions(pendingTaskId ?? ""),
+    enabled: !!pendingTaskId,
+  });
+
+  // Detect streaming-complete → awaiting-input transition.
+  useEffect(() => {
+    // Reset when pendingTaskId changes (new task, cancelled, completed).
+    if (pendingTaskId !== lastAwaitingPendingIdRef.current) {
+      lastAwaitingPendingIdRef.current = pendingTaskId ?? null;
+      if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
+      awaitingTimerRef.current = null;
+      setIsAwaitingInput(false);
+    }
+
+    if (!pendingTaskId || !liveTaskMessages || liveTaskMessages.length === 0) return;
+
+    const latest = liveTaskMessages[liveTaskMessages.length - 1];
+
+    // Debounce: if the agent has emitted text output and no new messages
+    // arrive within 1.5 s, treat it as awaiting user input.
+    if (latest.type === "text") {
+      if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
+      awaitingTimerRef.current = setTimeout(() => {
+        setIsAwaitingInput(true);
+        uiLogger.info("awaitingInput detected", {
+          pendingTaskId,
+          msgCount: liveTaskMessages.length,
+        });
+      }, 1500);
+    }
+
+    return () => {
+      if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
+    };
+  }, [liveTaskMessages, pendingTaskId]);
 
   // Legacy archived sessions (the old soft-archive feature was removed but
   // pre-existing rows with status='archived' may still exist) render as
@@ -353,6 +403,15 @@ export function ChatWindow() {
     ],
   );
 
+  // Wrapper around handleSend that also resets the awaitingInput flag.
+  const sendAndResetAwaiting = useCallback(
+    async (content: string, attachmentIds?: string[]) => {
+      setIsAwaitingInput(false);
+      await handleSend(content, attachmentIds);
+    },
+    [handleSend],
+  );
+
   const handleStop = useCallback(() => {
     if (!pendingTaskId || !activeSessionId) {
       apiLogger.debug("cancelTask skipped: no pending task");
@@ -569,10 +628,11 @@ export function ChatWindow() {
       {/* Input — disabled for legacy archived sessions; locked out entirely
        *  when there's no agent (the EmptyState above carries the CTA). */}
       <ChatInput
-        onSend={handleSend}
+        onSend={sendAndResetAwaiting}
         onUploadFile={handleUploadFile}
         onStop={handleStop}
         isRunning={!!pendingTaskId}
+        isAwaitingInput={isAwaitingInput}
         disabled={isSessionArchived}
         noAgent={noAgent}
         agentName={activeAgent?.name}

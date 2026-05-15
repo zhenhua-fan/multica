@@ -118,6 +118,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		h.LocalSkillListStore = handler.NewRedisLocalSkillListStore(rdb)
 		h.LocalSkillImportStore = handler.NewRedisLocalSkillImportStore(rdb)
 		h.LivenessStore = handler.NewRedisLivenessStore(rdb)
+		h.WikiSearchCache = handler.NewWikiSearchCache(rdb)
 	}
 	if opts.HeartbeatScheduler != nil {
 		h.HeartbeatScheduler = opts.HeartbeatScheduler
@@ -561,7 +562,34 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			})
 			r.Get("/api/chat/pending-tasks", h.ListPendingChatTasks)
 
-			// Inbox
+		// Channels
+		r.Route("/api/channels", func(r chi.Router) {
+			r.Get("/", h.ListChannels)
+			r.Post("/", h.CreateChannel)
+			r.Route("/{channelId}", func(r chi.Router) {
+				r.Get("/", h.GetChannel)
+				r.Patch("/", h.UpdateChannel)
+				r.Delete("/", h.ArchiveChannel)
+				r.Get("/members", h.ListChannelMembers)
+				r.Post("/members", h.AddChannelMember)
+				r.Route("/members/{memberId}", func(r chi.Router) {
+					r.Patch("/", h.UpdateChannelMember)
+					r.Delete("/", h.RemoveChannelMember)
+				})
+				// Wiki routes (channel-scoped)
+				r.Route("/wiki", func(r chi.Router) {
+					r.Get("/documents", h.ListWikiDocuments)
+					r.Post("/documents", h.CreateWikiDocument)
+					r.Route("/documents/{docId}", func(r chi.Router) {
+						r.Get("/", h.GetWikiDocument)
+						r.Delete("/", h.ArchiveWikiDocument)
+					})
+					r.Post("/search", h.WikiSearch)
+				})
+			})
+		})
+
+		// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
 				r.Get("/", h.ListInbox)
 				r.Get("/unread-count", h.CountUnreadInbox)

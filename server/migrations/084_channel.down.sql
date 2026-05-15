@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS channel_member;
+DROP TABLE IF EXISTS channel;

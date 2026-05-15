@@ -68,6 +68,7 @@ const (
 	// Chat events
 	EventChatMessage        = "chat:message"
 	EventChatDone           = "chat:done"
+	EventChatWikiRef        = "chat:wiki_ref"
 	EventChatSessionRead    = "chat:session_read"
 	EventChatSessionDeleted = "chat:session_deleted"
 	EventChatSessionUpdated = "chat:session_updated"

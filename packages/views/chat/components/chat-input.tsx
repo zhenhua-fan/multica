@@ -30,6 +30,11 @@ interface ChatInputProps {
   onUploadFile?: (file: File) => Promise<UploadResult | null>;
   onStop?: () => void;
   isRunning?: boolean;
+  /** True when the agent task is still running but the agent has finished
+   *  streaming its output and appears to be waiting for user input (e.g.
+   *  after asking a question). Overrides the isRunning send-block so the
+   *  user can type a response, and swaps the Stop button back to Send. */
+  isAwaitingInput?: boolean;
   disabled?: boolean;
   /** True when the user has no agent available — disables the editor and
    *  surfaces a distinct placeholder. Kept separate from `disabled` so
@@ -51,6 +56,7 @@ export function ChatInput({
   onUploadFile,
   onStop,
   isRunning,
+  isAwaitingInput,
   disabled,
   noAgent,
   agentName,
@@ -129,10 +135,14 @@ export function ChatInput({
 
   const handleSend = () => {
     const content = editorRef.current?.getMarkdown()?.replace(/(\n\s*)+$/, "").trim();
-    if (!content || isRunning || disabled || noAgent) {
+    // Block send while agent is actively running, unless the agent is awaiting
+    // user input (e.g. after asking a question / waiting for tool input).
+    const blocked = !content || (isRunning && !isAwaitingInput) || disabled || noAgent;
+    if (blocked) {
       logger.debug("input.send skipped", {
         emptyContent: !content,
         isRunning,
+        isAwaitingInput,
         disabled,
         noAgent,
       });
@@ -255,7 +265,7 @@ export function ChatInput({
           <SubmitButton
             onClick={handleSend}
             disabled={isEmpty || !!disabled || !!noAgent || pendingUploads > 0}
-            running={isRunning}
+            running={isRunning && !isAwaitingInput}
             onStop={onStop}
             tooltip={`${t(($) => $.input.send_tooltip)} · ${formatShortcut(modKey, enterKey)}`}
             stopTooltip={t(($) => $.input.stop_tooltip)}

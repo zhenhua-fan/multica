@@ -77,6 +77,13 @@ func StrToText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
+func TextOrDefault(t pgtype.Text) string {
+	if t.Valid {
+		return t.String
+	}
+	return ""
+}
+
 func TimestampToString(t pgtype.Timestamptz) string {
 	if !t.Valid {
 		return ""

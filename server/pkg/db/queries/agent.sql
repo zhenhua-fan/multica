@@ -20,8 +20,9 @@ WHERE id = $1 AND workspace_id = $2;
 INSERT INTO agent (
     workspace_id, name, description, avatar_url, runtime_mode,
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
-    instructions, custom_env, custom_args, mcp_config, model
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    instructions, custom_env, custom_args, mcp_config, model,
+    wiki_enabled, wiki_top_k, wiki_threshold
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 RETURNING *;
 
 -- name: UpdateAgent :one
@@ -40,6 +41,9 @@ UPDATE agent SET
     custom_args = COALESCE(sqlc.narg('custom_args'), custom_args),
     mcp_config = COALESCE(sqlc.narg('mcp_config'), mcp_config),
     model = COALESCE(sqlc.narg('model'), model),
+    wiki_enabled = COALESCE(sqlc.narg('wiki_enabled'), wiki_enabled),
+    wiki_top_k = COALESCE(sqlc.narg('wiki_top_k'), wiki_top_k),
+    wiki_threshold = COALESCE(sqlc.narg('wiki_threshold'), wiki_threshold),
     updated_at = now()
 WHERE id = $1
 RETURNING *;

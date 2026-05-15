@@ -111,6 +111,23 @@ type ChatSessionUpdatedPayload struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// WikiRefPayload is broadcast when an agent references wiki knowledge in its
+// response. Carries the list of source documents and their matched chunks so
+// the frontend can render citation cards.
+type WikiRefPayload struct {
+	ChatSessionID string       `json:"chat_session_id"`
+	TaskID        string       `json:"task_id"`
+	Documents     []WikiRefDoc `json:"documents"`
+}
+
+// WikiRefDoc represents a single wiki document referenced by the agent.
+type WikiRefDoc struct {
+	DocumentID    string  `json:"document_id"`
+	DocumentTitle string  `json:"document_title"`
+	Chunks        []int   `json:"chunks"`
+	Similarity    float64 `json:"similarity"`
+}
+
 // DaemonHeartbeatRequestPayload is sent from daemon to server over WebSocket
 // to update last_seen_at and pull pending actions for a single runtime.
 // Mirrors the body of POST /api/daemon/heartbeat so both transports share
