@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/internal/util"
 )
@@ -79,7 +81,7 @@ func wikiDocumentToResponse(d db.WikiDocument) WikiDocumentResponse {
 		Content:     d.Content,
 		ContentType: d.ContentType,
 		Status:      d.Status,
-		SourceURL:   d.SourceURL,
+		SourceURL:   d.SourceUrl,
 		TokenCount:  d.TokenCount,
 		ChunkCount:  d.ChunkCount,
 		CreatedBy:   util.UUIDToString(d.CreatedBy),
@@ -178,7 +180,7 @@ func (h *Handler) CreateWikiDocument(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Content:     req.Content,
 		ContentType: req.ContentType,
-		SourceURL:   req.SourceURL,
+		SourceUrl:   req.SourceURL,
 		CreatedBy:   userUUID,
 	})
 	if err != nil {
@@ -219,9 +221,9 @@ func (h *Handler) UpdateWikiDocument(w http.ResponseWriter, r *http.Request) {
 	doc, err := h.Queries.UpdateWikiDocument(r.Context(), db.UpdateWikiDocumentParams{
 		ID:        docUUID,
 		ChannelID: channelUUID,
-		Title:     req.Title,
-		Content:   req.Content,
-		Status:    req.Status,
+		Title:     util.PtrToText(req.Title),
+		Content:   util.PtrToText(req.Content),
+		Status:    util.PtrToText(req.Status),
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, "document not found")
@@ -297,7 +299,7 @@ func (h *Handler) SearchWiki(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Embed the query text into a vector
-	embedding, err := embedText(r.Context(), req.Query)
+	embedding, err := embedText(r.Context(), req.Query, h.Embedding, "query")
 	if err != nil {
 		slog.Error("failed to embed search query", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to process search query")
@@ -306,10 +308,10 @@ func (h *Handler) SearchWiki(w http.ResponseWriter, r *http.Request) {
 
 	// Search via pgvector
 	chunks, err := h.Queries.SearchWikiChunks(r.Context(), db.SearchWikiChunksParams{
-		ChannelID: channelUUID,
-		Limit:     req.TopK,
-		Embedding: embedding,
-		Threshold: req.Threshold,
+		ChannelID:   channelUUID,
+		TopK:        req.TopK,
+		QueryVector: embedding,
+		Threshold:   pgtype.Float8{Float64: req.Threshold, Valid: true},
 	})
 	if err != nil {
 		slog.Error("failed to search wiki", "error", err)
@@ -346,6 +348,7 @@ func (h *Handler) SearchWiki(w http.ResponseWriter, r *http.Request) {
 // indexWikiDocument processes a document: chunk text → embed → store chunks.
 func (h *Handler) indexWikiDocument(doc db.WikiDocument) {
 	ctx := context.Background()
+	slog.Info("indexing wiki document", "doc_id", util.UUIDToString(doc.ID), "content_len", len(doc.Content))
 
 	// 1. Determine content type and parse
 	content := doc.Content
@@ -364,11 +367,12 @@ func (h *Handler) indexWikiDocument(doc db.WikiDocument) {
 	// 4. Embed and store each chunk
 	totalTokens := int32(0)
 	for i, chunk := range chunks {
-		embedding, err := embedText(ctx, chunk)
+		embedding, err := embedText(ctx, chunk, h.Embedding, "passage")
 		if err != nil {
 			slog.Error("failed to embed wiki chunk", "error", err, "document_id", util.UUIDToString(doc.ID), "chunk_index", i)
 			continue
 		}
+		slog.Info("embedding ok, storing chunk", "doc_id", util.UUIDToString(doc.ID), "chunk_index", i, "dim", len(embedding.Slice()))
 		tokens := int32(countTokens(chunk))
 
 		_, err = h.Queries.CreateWikiChunk(ctx, db.CreateWikiChunkParams{
@@ -377,6 +381,7 @@ func (h *Handler) indexWikiDocument(doc db.WikiDocument) {
 			Content:    chunk,
 			Embedding:  embedding,
 			TokenCount: tokens,
+			Meta:       []byte("{}"),
 		})
 		if err != nil {
 			slog.Error("failed to store wiki chunk", "error", err, "document_id", util.UUIDToString(doc.ID), "chunk_index", i)
@@ -386,12 +391,13 @@ func (h *Handler) indexWikiDocument(doc db.WikiDocument) {
 	}
 
 	// 5. Mark document as indexed
+	status := "indexed"
 	h.Queries.UpdateWikiDocument(ctx, db.UpdateWikiDocumentParams{
 		ID:         doc.ID,
 		ChannelID:  doc.ChannelID,
-		Status:     strPtr("indexed"),
-		TokenCount: &totalTokens,
-		ChunkCount: int32Ptr(int32(len(chunks))),
+		Status:     util.StrToText(status),
+		TokenCount: pgtype.Int4{Int32: totalTokens, Valid: true},
+		ChunkCount: pgtype.Int4{Int32: int32(len(chunks)), Valid: true},
 	})
 
 	slog.Info("wiki document indexed",
@@ -453,13 +459,14 @@ func countTokens(text string) int {
 
 // embedText calls the embedding API to convert text to a vector.
 // In production this would call OpenAI /text-embedding-3-small or similar.
-func embedText(ctx context.Context, text string) ([]float32, error) {
-	// TODO: Replace with actual embedding API call.
-	// For now return a zero vector of dimension 1536 to satisfy the interface.
-	// Implementation will depend on the Multica agent's provider configuration.
-	dim := 1536
-	vec := make([]float32, dim)
-	return vec, nil
+func embedText(ctx context.Context, text string, svc EmbeddingService, inputType string) (pgvector.Vector, error) {
+	if svc == nil {
+		return pgvector.NewVector(make([]float32, 1536)), nil
+	}
+	if oai, ok := svc.(*OpenAIEmbeddingService); ok {
+		return oai.EmbedWithType(ctx, text, inputType)
+	}
+	return svc.EmbedText(ctx, text)
 }
 
 // ---------------------------------------------------------------------------

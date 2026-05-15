@@ -47,3 +47,37 @@ export async function openWorkspaceMenu(page: Page) {
   // Wait for dropdown to appear
   await page.locator('[class*="popover"]').waitFor({ state: "visible" });
 }
+
+/**
+ * Lightweight API helper for channel/wiki/chat E2E test data setup using page.request.
+ * Use this for simple CRUD operations — no DB connection needed.
+ */
+export function createApiHelper(page: Page) {
+  const api = page.request;
+  return {
+    async createChannel(data: { name: string; slug: string; description?: string }) {
+      const res = await api.post("/api/channels", { data });
+      return res.json();
+    },
+    async listChannels() {
+      const res = await api.get("/api/channels");
+      return res.json();
+    },
+    async createWikiDocument(channelId: string, data: { title: string; content: string; content_type?: string }) {
+      const res = await api.post(`/api/channels/${channelId}/wiki/documents`, { data });
+      return res.json();
+    },
+    async searchWiki(channelId: string, query: string, topK = 5) {
+      const res = await api.post(`/api/channels/${channelId}/wiki/search`, { data: { query, top_k: topK, threshold: 0.5 } });
+      return res.json();
+    },
+    async createChatSession(data: { agent_id: string; title?: string }) {
+      const res = await api.post("/api/chat/sessions", { data });
+      return res.json();
+    },
+    async sendChatMessage(sessionId: string, content: string) {
+      const res = await api.post(`/api/chat/sessions/${sessionId}/messages`, { data: { content } });
+      return res.json();
+    },
+  };
+}

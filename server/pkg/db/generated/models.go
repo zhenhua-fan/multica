@@ -6,6 +6,7 @@ package db
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 type ActivityLog struct {
@@ -41,6 +42,12 @@ type Agent struct {
 	CustomArgs         []byte             `json:"custom_args"`
 	McpConfig          []byte             `json:"mcp_config"`
 	Model              pgtype.Text        `json:"model"`
+	// Whether the agent automatically searches the wiki for relevant knowledge before responding
+	WikiEnabled bool `json:"wiki_enabled"`
+	// Maximum number of wiki chunks to retrieve per query
+	WikiTopK int32 `json:"wiki_top_k"`
+	// Minimum cosine similarity threshold (0.0-1.0) for wiki results
+	WikiThreshold float32 `json:"wiki_threshold"`
 }
 
 type AgentRuntime struct {
@@ -159,6 +166,29 @@ type AutopilotTrigger struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Channel struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	Description string             `json:"description"`
+	AvatarUrl   string             `json:"avatar_url"`
+	OwnerID     pgtype.UUID        `json:"owner_id"`
+	Settings    []byte             `json:"settings"`
+	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ChannelMember struct {
+	ID        pgtype.UUID        `json:"id"`
+	ChannelID pgtype.UUID        `json:"channel_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Role      string             `json:"role"`
+	AddedBy   pgtype.UUID        `json:"added_by"`
+	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
+}
+
 type ChatMessage struct {
 	ID            pgtype.UUID        `json:"id"`
 	ChatSessionID pgtype.UUID        `json:"chat_session_id"`
@@ -183,29 +213,6 @@ type ChatSession struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	UnreadSince pgtype.Timestamptz `json:"unread_since"`
 	RuntimeID   pgtype.UUID        `json:"runtime_id"`
-}
-
-type Channel struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description string             `json:"description"`
-	AvatarUrl   string             `json:"avatar_url"`
-	OwnerID     pgtype.UUID        `json:"owner_id"`
-	Settings    []byte             `json:"settings"`
-	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type ChannelMember struct {
-	ID        pgtype.UUID        `json:"id"`
-	ChannelID pgtype.UUID        `json:"channel_id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Role      string             `json:"role"`
-	AddedBy   pgtype.UUID        `json:"added_by"`
-	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
 }
 
 type Comment struct {
@@ -608,6 +615,34 @@ type VerificationCode struct {
 	Used      bool               `json:"used"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	Attempts  int32              `json:"attempts"`
+}
+
+type WikiChunk struct {
+	ID         pgtype.UUID        `json:"id"`
+	DocumentID pgtype.UUID        `json:"document_id"`
+	ChunkIndex int32              `json:"chunk_index"`
+	Content    string             `json:"content"`
+	Embedding  pgvector.Vector    `json:"embedding"`
+	TokenCount int32              `json:"token_count"`
+	Meta       []byte             `json:"meta"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type WikiDocument struct {
+	ID          pgtype.UUID        `json:"id"`
+	ChannelID   pgtype.UUID        `json:"channel_id"`
+	Title       string             `json:"title"`
+	Content     string             `json:"content"`
+	ContentType string             `json:"content_type"`
+	SourceUrl   string             `json:"source_url"`
+	Status      string             `json:"status"`
+	FilePath    string             `json:"file_path"`
+	TokenCount  int32              `json:"token_count"`
+	ChunkCount  int32              `json:"chunk_count"`
+	Meta        []byte             `json:"meta"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Workspace struct {

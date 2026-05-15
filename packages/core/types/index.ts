@@ -113,3 +113,13 @@ export type {
   UpdateSquadMemberRoleRequest,
   CreateSquadActivityLogRequest,
 } from "./squad";
+export type {
+  Channel,
+  ChannelMember,
+  ChannelMemberRole,
+  CreateChannelRequest,
+  UpdateChannelRequest,
+  AddMemberRequest,
+  UpdateMemberRoleRequest,
+} from "./channel";
+export type * from "./wiki";

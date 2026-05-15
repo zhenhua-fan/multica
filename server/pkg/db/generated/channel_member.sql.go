@@ -11,6 +11,74 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addChannelMember = `-- name: AddChannelMember :one
+INSERT INTO channel_member (channel_id, user_id, role, added_by)
+VALUES ($1, $2, $3, $4)
+RETURNING id, channel_id, user_id, role, added_by, joined_at
+`
+
+type AddChannelMemberParams struct {
+	ChannelID pgtype.UUID `json:"channel_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+	Role      string      `json:"role"`
+	AddedBy   pgtype.UUID `json:"added_by"`
+}
+
+func (q *Queries) AddChannelMember(ctx context.Context, arg AddChannelMemberParams) (ChannelMember, error) {
+	row := q.db.QueryRow(ctx, addChannelMember,
+		arg.ChannelID,
+		arg.UserID,
+		arg.Role,
+		arg.AddedBy,
+	)
+	var i ChannelMember
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.UserID,
+		&i.Role,
+		&i.AddedBy,
+		&i.JoinedAt,
+	)
+	return i, err
+}
+
+const countChannelMembers = `-- name: CountChannelMembers :one
+SELECT COUNT(*) FROM channel_member
+WHERE channel_id = $1
+`
+
+func (q *Queries) CountChannelMembers(ctx context.Context, channelID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countChannelMembers, channelID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getChannelMember = `-- name: GetChannelMember :one
+SELECT id, channel_id, user_id, role, added_by, joined_at FROM channel_member
+WHERE channel_id = $1 AND user_id = $2
+`
+
+type GetChannelMemberParams struct {
+	ChannelID pgtype.UUID `json:"channel_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetChannelMember(ctx context.Context, arg GetChannelMemberParams) (ChannelMember, error) {
+	row := q.db.QueryRow(ctx, getChannelMember, arg.ChannelID, arg.UserID)
+	var i ChannelMember
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.UserID,
+		&i.Role,
+		&i.AddedBy,
+		&i.JoinedAt,
+	)
+	return i, err
+}
+
 const listChannelMembers = `-- name: ListChannelMembers :many
 SELECT cm.id, cm.channel_id, cm.user_id, cm.role, cm.added_by, cm.joined_at, u.name AS display_name, u.avatar_url, u.email
 FROM channel_member cm
@@ -61,89 +129,6 @@ func (q *Queries) ListChannelMembers(ctx context.Context, channelID pgtype.UUID)
 	return items, nil
 }
 
-const getChannelMember = `-- name: GetChannelMember :one
-SELECT id, channel_id, user_id, role, added_by, joined_at FROM channel_member
-WHERE channel_id = $1 AND user_id = $2
-`
-
-type GetChannelMemberParams struct {
-	ChannelID pgtype.UUID `json:"channel_id"`
-	UserID    pgtype.UUID `json:"user_id"`
-}
-
-func (q *Queries) GetChannelMember(ctx context.Context, arg GetChannelMemberParams) (ChannelMember, error) {
-	row := q.db.QueryRow(ctx, getChannelMember, arg.ChannelID, arg.UserID)
-	var i ChannelMember
-	err := row.Scan(
-		&i.ID,
-		&i.ChannelID,
-		&i.UserID,
-		&i.Role,
-		&i.AddedBy,
-		&i.JoinedAt,
-	)
-	return i, err
-}
-
-const addChannelMember = `-- name: AddChannelMember :one
-INSERT INTO channel_member (channel_id, user_id, role, added_by)
-VALUES ($1, $2, $3, $4)
-RETURNING id, channel_id, user_id, role, added_by, joined_at
-`
-
-type AddChannelMemberParams struct {
-	ChannelID pgtype.UUID `json:"channel_id"`
-	UserID    pgtype.UUID `json:"user_id"`
-	Role      string      `json:"role"`
-	AddedBy   pgtype.UUID `json:"added_by"`
-}
-
-func (q *Queries) AddChannelMember(ctx context.Context, arg AddChannelMemberParams) (ChannelMember, error) {
-	row := q.db.QueryRow(ctx, addChannelMember,
-		arg.ChannelID,
-		arg.UserID,
-		arg.Role,
-		arg.AddedBy,
-	)
-	var i ChannelMember
-	err := row.Scan(
-		&i.ID,
-		&i.ChannelID,
-		&i.UserID,
-		&i.Role,
-		&i.AddedBy,
-		&i.JoinedAt,
-	)
-	return i, err
-}
-
-const updateChannelMember = `-- name: UpdateChannelMember :one
-UPDATE channel_member SET
-    role = COALESCE($3, role)
-WHERE channel_id = $1 AND user_id = $2
-RETURNING id, channel_id, user_id, role, added_by, joined_at
-`
-
-type UpdateChannelMemberParams struct {
-	ChannelID pgtype.UUID `json:"channel_id"`
-	UserID    pgtype.UUID `json:"user_id"`
-	Role      *string     `json:"role"`
-}
-
-func (q *Queries) UpdateChannelMember(ctx context.Context, arg UpdateChannelMemberParams) (ChannelMember, error) {
-	row := q.db.QueryRow(ctx, updateChannelMember, arg.ChannelID, arg.UserID, arg.Role)
-	var i ChannelMember
-	err := row.Scan(
-		&i.ID,
-		&i.ChannelID,
-		&i.UserID,
-		&i.Role,
-		&i.AddedBy,
-		&i.JoinedAt,
-	)
-	return i, err
-}
-
 const removeChannelMember = `-- name: RemoveChannelMember :exec
 DELETE FROM channel_member
 WHERE channel_id = $1 AND user_id = $2
@@ -159,14 +144,29 @@ func (q *Queries) RemoveChannelMember(ctx context.Context, arg RemoveChannelMemb
 	return err
 }
 
-const countChannelMembers = `-- name: CountChannelMembers :one
-SELECT COUNT(*) FROM channel_member
-WHERE channel_id = $1
+const updateChannelMember = `-- name: UpdateChannelMember :one
+UPDATE channel_member SET
+    role = COALESCE($3, role)
+WHERE channel_id = $1 AND user_id = $2
+RETURNING id, channel_id, user_id, role, added_by, joined_at
 `
 
-func (q *Queries) CountChannelMembers(ctx context.Context, channelID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countChannelMembers, channelID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type UpdateChannelMemberParams struct {
+	ChannelID pgtype.UUID `json:"channel_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+	Role      pgtype.Text `json:"role"`
+}
+
+func (q *Queries) UpdateChannelMember(ctx context.Context, arg UpdateChannelMemberParams) (ChannelMember, error) {
+	row := q.db.QueryRow(ctx, updateChannelMember, arg.ChannelID, arg.UserID, arg.Role)
+	var i ChannelMember
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.UserID,
+		&i.Role,
+		&i.AddedBy,
+		&i.JoinedAt,
+	)
+	return i, err
 }

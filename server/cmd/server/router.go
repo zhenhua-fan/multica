@@ -120,6 +120,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		h.LivenessStore = handler.NewRedisLivenessStore(rdb)
 		h.WikiSearchCache = handler.NewWikiSearchCache(rdb)
 	}
+	// Initialize embedding service (OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_EMBEDDING_MODEL)
+	h.Embedding = handler.NewOpenAIEmbeddingService()
 	if opts.HeartbeatScheduler != nil {
 		h.HeartbeatScheduler = opts.HeartbeatScheduler
 	}
@@ -576,16 +578,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Patch("/", h.UpdateChannelMember)
 					r.Delete("/", h.RemoveChannelMember)
 				})
-				// Wiki routes (channel-scoped)
-				r.Route("/wiki", func(r chi.Router) {
-					r.Get("/documents", h.ListWikiDocuments)
-					r.Post("/documents", h.CreateWikiDocument)
-					r.Route("/documents/{docId}", func(r chi.Router) {
-						r.Get("/", h.GetWikiDocument)
-						r.Delete("/", h.ArchiveWikiDocument)
-					})
-					r.Post("/search", h.WikiSearch)
+			// Wiki routes (channel-scoped)
+			r.Route("/wiki", func(r chi.Router) {
+				r.Get("/documents", h.ListWikiDocuments)
+				r.Post("/create-document", h.CreateWikiDocument)
+				r.Route("/documents/{docId}", func(r chi.Router) {
+					r.Get("/", h.GetWikiDocument)
+					r.Patch("/", h.UpdateWikiDocument)
+					r.Delete("/", h.ArchiveWikiDocument)
 				})
+				r.Post("/search", h.SearchWiki)
+			})
 			})
 		})
 

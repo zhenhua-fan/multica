@@ -165,9 +165,9 @@ func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: wsUUID,
 		Name:        req.Name,
 		Slug:        req.Slug,
-		Description: pgtype.Text{String: req.Description, Valid: true},
-		AvatarUrl:   pgtype.Text{String: "", Valid: true},
+		Description: req.Description,
 		OwnerID:     userUUID,
+		AvatarUrl:   pgtype.Text{String: "", Valid: true},
 		Settings:    []byte("{}"),
 	})
 	if err != nil {
@@ -427,7 +427,7 @@ func (h *Handler) UpdateChannelMember(w http.ResponseWriter, r *http.Request) {
 	member, err := h.Queries.UpdateChannelMember(r.Context(), db.UpdateChannelMemberParams{
 		ChannelID: channelUUID,
 		UserID:    targetUserID,
-		Role:      &req.Role,
+		Role:      util.PtrToText(&req.Role),
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, "member not found")

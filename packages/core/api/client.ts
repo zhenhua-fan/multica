@@ -93,6 +93,15 @@ import type {
   GitHubConnectResponse,
   Squad,
   SquadMember,
+  Channel,
+  ChannelMember,
+  CreateChannelRequest,
+  UpdateChannelRequest,
+  AddMemberRequest,
+  UpdateMemberRoleRequest,
+  ChannelListResponse,
+  ChannelResponse,
+  ChannelMemberListResponse,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import { type Logger, noopLogger } from "../logger";
@@ -1487,6 +1496,47 @@ export class ApiClient {
     return this.fetch(`/api/squads/${squadId}/members/role`, { method: "PATCH", body: JSON.stringify(data) });
   }
 
+  // Channels
+  async listChannels(): Promise<ChannelListResponse> {
+    return this.fetch("/api/channels");
+  }
+  async getChannel(channelId: string): Promise<ChannelResponse> {
+    return this.fetch(`/api/channels/${channelId}`);
+  }
+  async createChannel(data: CreateChannelRequest): Promise<ChannelResponse> {
+    return this.fetch("/api/channels", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateChannel(channelId: string, data: UpdateChannelRequest): Promise<ChannelResponse> {
+    return this.fetch(`/api/channels/${channelId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async archiveChannel(channelId: string): Promise<{ success: boolean; data: { status: string } }> {
+    return this.fetch(`/api/channels/${channelId}`, { method: "DELETE" });
+  }
+  async listChannelMembers(channelId: string): Promise<ChannelMemberListResponse> {
+    return this.fetch(`/api/channels/${channelId}/members`);
+  }
+  async addChannelMember(channelId: string, data: AddMemberRequest): Promise<{ success: boolean; data: { id: string; user_id: string; role: string; added_by: string; joined_at: string } }> {
+    return this.fetch(`/api/channels/${channelId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+  async updateChannelMember(channelId: string, memberId: string, data: UpdateMemberRoleRequest): Promise<{ success: boolean; data: { id: string; role: string } }> {
+    return this.fetch(`/api/channels/${channelId}/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+  async removeChannelMember(channelId: string, memberId: string): Promise<{ success: boolean; data: { status: string } }> {
+    return this.fetch(`/api/channels/${channelId}/members/${memberId}`, { method: "DELETE" });
+  }
+
   // Autopilots
   async listAutopilots(params?: { status?: string }): Promise<ListAutopilotsResponse> {
     const search = new URLSearchParams();
@@ -1562,5 +1612,27 @@ export class ApiClient {
 
   async listIssuePullRequests(issueId: string): Promise<{ pull_requests: GitHubPullRequest[] }> {
     return this.fetch(`/api/issues/${issueId}/pull-requests`);
+  }
+
+  // Wiki
+  async listWikiDocuments(channelId: string, params?: { status?: string }): Promise<WikiDocumentListResponse> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    return this.fetch(`/api/channels/${channelId}/wiki/documents?${search}`);
+  }
+  async getWikiDocument(channelId: string, docId: string): Promise<WikiDocumentResponse> {
+    return this.fetch(`/api/channels/${channelId}/wiki/documents/${docId}`);
+  }
+  async createWikiDocument(channelId: string, data: CreateWikiDocumentRequest): Promise<WikiDocumentResponse> {
+    return this.fetch(`/api/channels/${channelId}/wiki/documents`, { method: "POST", body: JSON.stringify(data) });
+  }
+  async updateWikiDocument(channelId: string, docId: string, data: UpdateWikiDocumentRequest): Promise<WikiDocumentResponse> {
+    return this.fetch(`/api/channels/${channelId}/wiki/documents/${docId}`, { method: "PATCH", body: JSON.stringify(data) });
+  }
+  async archiveWikiDocument(channelId: string, docId: string): Promise<{ success: boolean; data: { status: string } }> {
+    return this.fetch(`/api/channels/${channelId}/wiki/documents/${docId}`, { method: "DELETE" });
+  }
+  async searchWiki(channelId: string, data: WikiSearchRequest): Promise<WikiSearchResponse> {
+    return this.fetch(`/api/channels/${channelId}/wiki/search`, { method: "POST", body: JSON.stringify(data) });
   }
 }

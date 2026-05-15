@@ -11,80 +11,80 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const listChannels = `-- name: ListChannels :many
-SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
-WHERE workspace_id = $1 AND archived_at IS NULL
-ORDER BY created_at ASC
+const archiveChannel = `-- name: ArchiveChannel :one
+UPDATE channel SET
+    archived_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1 AND workspace_id = $2 AND archived_at IS NULL
+RETURNING id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at
 `
 
-func (q *Queries) ListChannels(ctx context.Context, workspaceID pgtype.UUID) ([]Channel, error) {
-	rows, err := q.db.Query(ctx, listChannels, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Channel{}
-	for rows.Next() {
-		var i Channel
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.AvatarUrl,
-			&i.OwnerID,
-			&i.Settings,
-			&i.ArchivedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type ArchiveChannelParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-const listAllChannels = `-- name: ListAllChannels :many
-SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
-WHERE workspace_id = $1
-ORDER BY created_at ASC
+func (q *Queries) ArchiveChannel(ctx context.Context, arg ArchiveChannelParams) (Channel, error) {
+	row := q.db.QueryRow(ctx, archiveChannel, arg.ID, arg.WorkspaceID)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.AvatarUrl,
+		&i.OwnerID,
+		&i.Settings,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createChannel = `-- name: CreateChannel :one
+INSERT INTO channel (
+    workspace_id, name, slug, description, avatar_url, owner_id, settings
+) VALUES ($1, $2, $3, $4, $6, $5, $7)
+RETURNING id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at
 `
 
-func (q *Queries) ListAllChannels(ctx context.Context, workspaceID pgtype.UUID) ([]Channel, error) {
-	rows, err := q.db.Query(ctx, listAllChannels, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Channel{}
-	for rows.Next() {
-		var i Channel
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.Name,
-			&i.Slug,
-			&i.Description,
-			&i.AvatarUrl,
-			&i.OwnerID,
-			&i.Settings,
-			&i.ArchivedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type CreateChannelParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+	Slug        string      `json:"slug"`
+	Description string      `json:"description"`
+	OwnerID     pgtype.UUID `json:"owner_id"`
+	AvatarUrl   pgtype.Text `json:"avatar_url"`
+	Settings    []byte      `json:"settings"`
+}
+
+func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
+	row := q.db.QueryRow(ctx, createChannel,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Slug,
+		arg.Description,
+		arg.OwnerID,
+		arg.AvatarUrl,
+		arg.Settings,
+	)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.AvatarUrl,
+		&i.OwnerID,
+		&i.Settings,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getChannel = `-- name: GetChannel :one
@@ -94,6 +94,35 @@ WHERE id = $1 AND archived_at IS NULL
 
 func (q *Queries) GetChannel(ctx context.Context, id pgtype.UUID) (Channel, error) {
 	row := q.db.QueryRow(ctx, getChannel, id)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.AvatarUrl,
+		&i.OwnerID,
+		&i.Settings,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getChannelBySlug = `-- name: GetChannelBySlug :one
+SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
+WHERE workspace_id = $1 AND slug = $2 AND archived_at IS NULL
+`
+
+type GetChannelBySlugParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Slug        string      `json:"slug"`
+}
+
+func (q *Queries) GetChannelBySlug(ctx context.Context, arg GetChannelBySlugParams) (Channel, error) {
+	row := q.db.QueryRow(ctx, getChannelBySlug, arg.WorkspaceID, arg.Slug)
 	var i Channel
 	err := row.Scan(
 		&i.ID,
@@ -140,48 +169,80 @@ func (q *Queries) GetChannelInWorkspace(ctx context.Context, arg GetChannelInWor
 	return i, err
 }
 
-const createChannel = `-- name: CreateChannel :one
-INSERT INTO channel (
-    workspace_id, name, slug, description, avatar_url, owner_id, settings
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at
+const listAllChannels = `-- name: ListAllChannels :many
+SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
+WHERE workspace_id = $1
+ORDER BY created_at ASC
 `
 
-type CreateChannelParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Name        string      `json:"name"`
-	Slug        string      `json:"slug"`
-	Description pgtype.Text `json:"description"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
-	OwnerID     pgtype.UUID `json:"owner_id"`
-	Settings    []byte      `json:"settings"`
+func (q *Queries) ListAllChannels(ctx context.Context, workspaceID pgtype.UUID) ([]Channel, error) {
+	rows, err := q.db.Query(ctx, listAllChannels, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Channel{}
+	for rows.Next() {
+		var i Channel
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.AvatarUrl,
+			&i.OwnerID,
+			&i.Settings,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
-	row := q.db.QueryRow(ctx, createChannel,
-		arg.WorkspaceID,
-		arg.Name,
-		arg.Slug,
-		arg.Description,
-		arg.AvatarUrl,
-		arg.OwnerID,
-		arg.Settings,
-	)
-	var i Channel
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.AvatarUrl,
-		&i.OwnerID,
-		&i.Settings,
-		&i.ArchivedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+const listChannels = `-- name: ListChannels :many
+SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
+WHERE workspace_id = $1 AND archived_at IS NULL
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListChannels(ctx context.Context, workspaceID pgtype.UUID) ([]Channel, error) {
+	rows, err := q.db.Query(ctx, listChannels, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Channel{}
+	for rows.Next() {
+		var i Channel
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.AvatarUrl,
+			&i.OwnerID,
+			&i.Settings,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateChannel = `-- name: UpdateChannel :one
@@ -213,67 +274,6 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 		arg.AvatarUrl,
 		arg.Settings,
 	)
-	var i Channel
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.AvatarUrl,
-		&i.OwnerID,
-		&i.Settings,
-		&i.ArchivedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const archiveChannel = `-- name: ArchiveChannel :one
-UPDATE channel SET
-    archived_at = NOW(),
-    updated_at = NOW()
-WHERE id = $1 AND workspace_id = $2 AND archived_at IS NULL
-RETURNING id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at
-`
-
-type ArchiveChannelParams struct {
-	ID          pgtype.UUID `json:"id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) ArchiveChannel(ctx context.Context, arg ArchiveChannelParams) (Channel, error) {
-	row := q.db.QueryRow(ctx, archiveChannel, arg.ID, arg.WorkspaceID)
-	var i Channel
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Slug,
-		&i.Description,
-		&i.AvatarUrl,
-		&i.OwnerID,
-		&i.Settings,
-		&i.ArchivedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getChannelBySlug = `-- name: GetChannelBySlug :one
-SELECT id, workspace_id, name, slug, description, avatar_url, owner_id, settings, archived_at, created_at, updated_at FROM channel
-WHERE workspace_id = $1 AND slug = $2 AND archived_at IS NULL
-`
-
-type GetChannelBySlugParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Slug        string      `json:"slug"`
-}
-
-func (q *Queries) GetChannelBySlug(ctx context.Context, arg GetChannelBySlugParams) (Channel, error) {
-	row := q.db.QueryRow(ctx, getChannelBySlug, arg.WorkspaceID, arg.Slug)
 	var i Channel
 	err := row.Scan(
 		&i.ID,
